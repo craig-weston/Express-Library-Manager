@@ -6,12 +6,11 @@ A simple library management system built using Express and SQL ORM Sequelize. It
 ## Getting Started
 ### Setup
 ```
-$ git clone https://github.com/anoopmundathan/library_manager.git
-$ cd library_manager
+$ git clone https://github.com/craig-weston/Express-Library-Manager.git
 ```
 ### Install
 ```
-$ npm i
+$ npm install
 ```
 ### Run 
 ```
