@@ -1,137 +1,119 @@
-'use strict';
+const express = require('express');
+const router = express.Router();
+const Book = require("../models").Book;
+const Loan = require("../models").Loan;
+const Patron = require("../models").Patron;
+const moment = require('moment');
+const Sequelize = require("sequelize");
+const Op = Sequelize.Op;
 
-var express = require('express');
-var router = express.Router();
-
-var moment = require('moment');
-
-var Books = require('../models').Books;
-var Patrons = require('../models').Patrons;
-var Loans = require('../models').Loans;
-
-// GET /loans - List All Loans
-router.get('/', function(req, res, next) {
-
-	var filter = req.query.filter;
-
-	Loans.belongsTo(Books, {foreignKey: 'book_id'});
-	Loans.belongsTo(Patrons, {foreignKey: 'patron_id'});
-
-	if(filter === 'overdue') {
-		/*
-		 * SELECT * 
-		 * FROM LOANS A 
-		 * INNER JOIN BOOKS B 
-		 * 		ON A.BOOK_ID = B.ID
-		 * WHERE 
-		 *		A.RETURN_BY < "TODAYS' DATE" AND A.RETURNED_ON IS NULL;
-		*/
-		Loans.findAll({
-			where: {returned_on: {$eq: null}, return_by: {$lt: new Date()}},
-			include: [
-				  		{model: Books,required: true}, 
-				  		{model: Patrons,required: true}
-				 	]
-		}).then(function(data) {
-			res.render('loans/overdue_loans', {loans: data});
-		}).catch(function(err) {
-    		res.sendStatus(500);
-  		});
-	} else if(filter === 'checked_out') {
-		/*
-		 * SELECT * 
-		 * FROM LOANS A 
-		 * INNER JOIN BOOKS B 
-		 *		ON A.BOOK_ID = B.ID 
-		 * WHERE 
-		 *		A.RETURNED_ON IS NULL;
-		*/
-		Loans.findAll({
-			where: {returned_on: {$eq: null}},
-			include: [
-				  		{model: Books,required: true}, 
-				  		{model: Patrons,required: true}
-				 	]
-		}).then(function(data) {
-			res.render('loans/checked_loans', {loans: data});
-		}).catch(function(err) {
-    		res.sendStatus(500);
-  		});
-	} else {
-		Loans.findAll({
-			include: [
-				  		{model: Books,required: true}, 
-				  		{model: Patrons,required: true}
-				 	]
-		}).then(function(loans) {
-			res.render('loans/all_loans', {loans: loans});
-		}).catch(function(err) {
-    		res.sendStatus(500);
-  		});
-	}	
+// GET all loans
+router.get('/', (req, res, next) =>  {
+  Loan.findAll({
+    include: [{ model: Book }, { model: Patron }],
+    order: [["return_by", "ASC"]]
+  }).then(loans => {
+    res.render("loans/loans", { loans, category: "Loans" });
+  }).catch(error => {
+      res.send(500, error);
+   });
 });
 
-// GET /loans/new - New Loan
-router.get('/new', function(req, res, next) {
-	
-	Books.findAll().then(function(books) {
-		Patrons.findAll().then(function(patrons) {
-			var loanedOn = moment().format('YYYY-MM-DD');
-			var returnBy = moment().add('7', 'days').format('YYYY-MM-DD');
-
-			res.render('loans/new_loan', 
-			{
-				books : books, 
-				patrons: patrons, 
-				loanedOn: loanedOn,
-				returnBy: returnBy
-			});
-
-		}).catch(function(err) {
-    		res.sendStatus(500);
-  		});
-	});	
+// GET overdue
+router.get('/overdue', (req, res, next) =>  {
+  Loan.findAll({
+    include: [{ model: Book }, { model: Patron }],
+    where: {
+      returned_on: null,
+      return_by: {
+        [Op.lte]: moment().format("YYYY-MM-DD")
+      }
+    },
+    order: [["return_by", "ASC"]]
+  }).then(loans => {
+    res.render("loans/loans", { loans, category: "Overdue Loans" });
+  }).catch(error => {
+      res.send(500, error);
+   });
 });
 
-// POST /loans  - Create New Loan
-router.post('/', function(req, res, next) {
-	Loans.create(req.body).then(function(loan) {
-		res.redirect('/loans');
-	}).catch(function(err) {
-    	res.sendStatus(500);
-  	});
+// GET checked_out
+router.get('/checked_out', (req, res, next) =>  {
+  Loan.findAll({
+    include: [{ model: Book }, { model: Patron }],
+    where: {
+      returned_on: null
+    },
+    order: [["return_by", "ASC"]]
+  }).then(loans => {
+    res.render("loans/loans", { loans, category: "Checked Out Loans" });
+  }).catch(error => {
+      res.send(500, error);
+   });
 });
 
-//GET /loans/:id - Return Book
-router.get('/:id', function(req, res, next) {
-	Loans.belongsTo(Books, {foreignKey: 'book_id'});
-	Loans.belongsTo(Patrons, {foreignKey: 'patron_id'});
-	Loans.findAll({
-			where: {id: {$eq: req.params.id}},
-			include: [
-				  		{model: Books,required: true}, 
-				  		{model: Patrons,required: true}
-				 	 ]
-		}).then(function(data) {
-			res.render('loans/return_book', {
-				loan: data,
-				returned_on: moment().format('YYYY-MM-DD')
-			});
-		}).catch(function(err) {
-    		res.sendStatus(500);
-  		});
+// GET new loan
+router.get('/new', (req, res, next) =>  {
+  const book = Book.findAll();
+  const patron = Patron.findAll();
+  const date = moment(new Date()).format('YYYY-MM-DD');
+  const dateAdd = moment(date).add(7, 'days').format('YYYY-MM-DD');
+  Promise.all([book, patron]).then(data => {
+    res.render("loans/new", { books: data[0], patrons: data[1], date, dateAdd })
+  })
 });
 
-//PUT /loans/:id - Return Book - Update 
-router.put('/:id', function(req, res, next) {
-	Loans.findById(req.params.id).then(function(loan) {
-		return loan.update(req.body);
-	}).then(function() {
-		res.redirect('/loans');
-	}).catch(function(err) {
-    	res.sendStatus(500);
-  	});
-});
+// POST new loan
+router.post('/new', (req, res, next) => {
+  Loan.create(req.body).then(loans => {
+    res.redirect("/loans")
+}).catch(error => {
+    if(error.name === "SequelizeValidationError") {
+      const book = Book.findAll();
+      const patron = Patron.findAll();
+      const date = moment(new Date()).format('YYYY-MM-DD');
+      const dateAdd = moment(date).add(7, 'days').format('YYYY-MM-DD');
+      Promise.all([book, patron]).then(data => {
+        res.render("loans/new", { books: data[0], patrons: data[1], date, dateAdd, errors: error.errors })
+      })
+    } else {
+      throw error;
+    }
+  })
+})
 
+// GET return book
+router.get('/return/:id', (req, res, next) =>  {
+  const date = moment(new Date()).format('YYYY-MM-DD');
+  Loan.find({
+    include: [{ model: Book }, { model: Patron }],
+    where: {
+      book_id: req.params.id
+    }
+  }).then(loan => {
+      res.render("loans/return", { loan, date })
+  })
+})
+
+// POST return book
+router.post("/return/:id", (req, res, next) => {
+  let errors = {};
+  if (!req.body.returned_on) {
+    errors.message = 'Please enter a valid return date.';
+    const date = moment(new Date()).format('YYYY-MM-DD');
+    Loan.find({
+      include: [{ model: Book }, { model: Patron }],
+      where: {
+        book_id: req.params.id
+      }
+    }).then(loan => {
+        res.render("loans/return", { loan, date, errors })
+    })
+  } else {
+    Loan.update(req.body, { where: { book_id: req.params.id } }).then(loan => {
+      res.redirect('/loans');
+  })
+ }
+})
 
 module.exports = router;

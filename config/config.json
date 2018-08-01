@@ -1,6 +1,26 @@
 {
   "development": {
     "storage": "library.db",
-    "dialect": "sqlite"
+    "dialect": "sqlite",
+    "operatorsAliases": false,
+    "define": {
+      "timestamps": false
+    }
+  },
+  "test": {
+    "storage": "test.db",
+    "dialect": "sqlite",
+    "operatorsAliases": false,
+    "define": {
+      "timestamps": false
+    }
+  },
+  "production": {
+    "storage": "production.db",
+    "dialect": "sqlite",
+    "operatorsAliases": false,
+    "define": {
+      "timestamps": false
+    }
   }
 }
